@@ -11,8 +11,8 @@ OBJS = ffmpeg.o                                                         \
        ffprobe.o                                                        \
        cmdutils.o                                                       \
 
-SLIBOBJS-$(CONFIG_LIBMFX) += ffmpeg_qsv.o
+OBJS-$(CONFIG_LIBMFX) += ffmpeg_qsv.o
 ifndef CONFIG_VIDEOTOOLBOX
-SLIBOBJS-$(CONFIG_VDA) += ffmpeg_videotoolbox.o
+OBJS-$(CONFIG_VDA) += ffmpeg_videotoolbox.o
 endif
-SLIBOBJS-$(CONFIG_VIDEOTOOLBOX) += ffmpeg_videotoolbox.o
+OBJS-$(CONFIG_VIDEOTOOLBOX) += ffmpeg_videotoolbox.o

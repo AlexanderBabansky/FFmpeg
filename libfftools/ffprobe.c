@@ -23,6 +23,8 @@
  * simple media prober based on the FFmpeg libraries
  */
 
+#include "fftools.h"
+
 #include "config.h"
 #include "libavutil/ffversion.h"
 
@@ -2849,7 +2851,7 @@ static void show_error(WriterContext *w, int err)
 static int open_input_file(InputFile *ifile, const char *filename,
                            const char *print_filename)
 {
-    int err, i;
+    int err, i, ok;
     AVFormatContext *fmt_ctx = NULL;
     AVDictionaryEntry *t;
     int scan_all_pmts_set = 0;
@@ -2857,7 +2859,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
     fmt_ctx = avformat_alloc_context();
     if (!fmt_ctx) {
         print_error(filename, AVERROR(ENOMEM));
-        exit_program(1);
+        exit(1);
     }
 
     if (!av_dict_get(format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
@@ -2882,7 +2884,9 @@ static int open_input_file(InputFile *ifile, const char *filename,
     }
 
     if (find_stream_info) {
-        AVDictionary **opts = setup_find_stream_info_opts(fmt_ctx, codec_opts);
+        AVDictionary **opts = setup_find_stream_info_opts(fmt_ctx, codec_opts, &ok);
+        if(!ok)
+            return -1;
         int orig_nb_streams = fmt_ctx->nb_streams;
 
         err = avformat_find_stream_info(fmt_ctx, opts);
@@ -2929,7 +2933,9 @@ static int open_input_file(InputFile *ifile, const char *filename,
         }
         {
             AVDictionary *opts = filter_codec_opts(codec_opts, stream->codecpar->codec_id,
-                                                   fmt_ctx, stream, codec);
+                                                   fmt_ctx, stream, codec, &ok);
+            if(!ok)
+                return -1;
 
             ist->dec_ctx = avcodec_alloc_context3(codec);
             if (!ist->dec_ctx)
@@ -2937,7 +2943,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
 
             err = avcodec_parameters_to_context(ist->dec_ctx, stream->codecpar);
             if (err < 0)
-                exit(1);
+                return err;
 
             if (do_show_log) {
                 // For loging it is needed to disable at least frame threads as otherwise
@@ -2957,7 +2963,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
             if (avcodec_open2(ist->dec_ctx, codec, &opts) < 0) {
                 av_log(NULL, AV_LOG_WARNING, "Could not open codec for input stream %d\n",
                        stream->index);
-                exit(1);
+                return -1;
             }
 
             if ((t = av_dict_get(opts, "", NULL, AV_DICT_IGNORE_SUFFIX))) {
@@ -3284,23 +3290,23 @@ static int opt_show_format_entry(void *optctx, const char *opt, const char *arg)
     return ret;
 }
 
-static void opt_input_file(void *optctx, const char *arg)
+static int opt_input_file(void *optctx, const char *arg)
 {
     if (input_filename) {
         av_log(NULL, AV_LOG_ERROR,
                 "Argument '%s' provided as input filename, but '%s' was already specified.\n",
                 arg, input_filename);
-        exit_program(1);
+        return -1;
     }
     if (!strcmp(arg, "-"))
         arg = "pipe:";
     input_filename = arg;
+    return 0;
 }
 
 static int opt_input_file_i(void *optctx, const char *opt, const char *arg)
 {
-    opt_input_file(optctx, arg);
-    return 0;
+    return opt_input_file(optctx, arg);
 }
 
 static int opt_print_filename(void *optctx, const char *opt, const char *arg)
@@ -3607,7 +3613,6 @@ int ffprobe_main(int argc, char **argv)
     }
 #endif
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
-    register_exit(ffprobe_cleanup);
 
     options = real_options;
     parse_loglevel(argc, argv, options, "ffprobe");
@@ -3617,8 +3622,13 @@ int ffprobe_main(int argc, char **argv)
     avdevice_register_all();
 #endif
 
-    show_banner(argc, argv, options, "ffprobe", "2007");
-    parse_options(NULL, argc, argv, options, opt_input_file);
+    show_banner(argc, argv, options, "ffprobe", 2007);
+    int ok;
+    parse_options(NULL, argc, argv, options, opt_input_file, &ok);
+    if(!ok) {
+        ret = -1;
+        goto end;
+    }
 
     if (do_show_log)
         av_log_set_callback(log_callback);
@@ -3735,6 +3745,8 @@ end:
         av_dict_free(&(sections[i].entries_to_show));
 
     avformat_network_deinit();
+
+    ffprobe_cleanup(ret);
 
     return ret < 0;
 }

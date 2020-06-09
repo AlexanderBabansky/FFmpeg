@@ -1,6 +1,7 @@
 LIBFFTOOLS_MAJOR {
     global:
-        fftools_*;
+        ffmpeg_main;
+        ffprobe_main;
     local:
         *;
 };

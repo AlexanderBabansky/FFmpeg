@@ -63,6 +63,17 @@
 #include <windows.h>
 #endif
 
+#ifdef _MSC_VER
+#pragma warning( push )
+#pragma warning( disable : 4133 )
+#pragma warning( disable : 4090 )
+#pragma warning( disable : 4244 )
+#pragma warning( disable : 4267 )
+#pragma warning( disable : 4996 )
+#pragma warning( disable : 4305 )
+#pragma warning( disable : 4018 )
+#endif
+
 static int init_report(const char *env, const char *program_name);
 
 AVDictionary *sws_dict;
@@ -123,50 +134,47 @@ void init_dynload(void)
 #endif
 }
 
-static void (*program_exit)(int ret);
-
-void register_exit(void (*cb)(int ret))
-{
-    program_exit = cb;
-}
-
-void exit_program(int ret)
-{
-    if (program_exit)
-        program_exit(ret);
-
-    exit(ret);
-}
-
-double parse_number_or_die(const char *context, const char *numstr, int type,
-                           double min, double max)
+double parse_number(const char *context, const char *numstr, int type,
+                           double min, double max, int* ok)
 {
     char *tail;
     const char *error;
     double d = av_strtod(numstr, &tail);
-    if (*tail)
+    if (*tail){
         error = "Expected number for %s but found: %s\n";
-    else if (d < min || d > max)
+    }else if (d < min || d > max){
         error = "The value for %s was %s which is not within %f - %f\n";
-    else if (type == OPT_INT64 && (int64_t)d != d)
+    }else if (type == OPT_INT64 && (int64_t)d != d){
         error = "Expected int64 for %s but found %s\n";
-    else if (type == OPT_INT && (int)d != d)
+    }else if (type == OPT_INT && (int)d != d){
         error = "Expected int for %s but found %s\n";
-    else
+    } else {
+        if(ok){
+            (*ok)=1;
+        }
         return d;
+    }
     av_log(NULL, AV_LOG_FATAL, error, context, numstr, min, max);
-    exit_program(1);
+    if(ok){
+        (*ok)=0;
+    }
     return 0;
 }
 
 int64_t parse_time_or_die(const char *context, const char *timestr,
-                          int is_duration)
+                          int is_duration, int* ok)
 {
     int64_t us;
     if (av_parse_time(&us, timestr, is_duration) < 0) {
         av_log(NULL, AV_LOG_FATAL, "Invalid %s specification for %s: %s\n",
                is_duration ? "duration" : "date", context, timestr);
-        exit_program(1);
+        if(ok){
+            (*ok)=0;
+        }
+        return 0;
+    }
+    if(ok){
+        (*ok)=1;
     }
     return us;
 }
@@ -305,6 +313,9 @@ static int write_option(void *optctx, const OptionDef *po, const char *opt,
 
         dstcount = (int *)(so + 1);
         *so = grow_array(*so, sizeof(**so), dstcount, *dstcount + 1);
+        if(!(*so)){
+            return -1;
+        }
         str = av_strdup(p ? p + 1 : "");
         if (!str)
             return AVERROR(ENOMEM);
@@ -312,6 +323,7 @@ static int write_option(void *optctx, const OptionDef *po, const char *opt,
         dst = &(*so)[*dstcount - 1].u;
     }
 
+    int ok=1;
     if (po->flags & OPT_STRING) {
         char *str;
         str = av_strdup(arg);
@@ -320,15 +332,15 @@ static int write_option(void *optctx, const OptionDef *po, const char *opt,
             return AVERROR(ENOMEM);
         *(char **)dst = str;
     } else if (po->flags & OPT_BOOL || po->flags & OPT_INT) {
-        *(int *)dst = parse_number_or_die(opt, arg, OPT_INT64, INT_MIN, INT_MAX);
+        *(int *)dst = parse_number(opt, arg, OPT_INT64, INT_MIN, INT_MAX, &ok);
     } else if (po->flags & OPT_INT64) {
-        *(int64_t *)dst = parse_number_or_die(opt, arg, OPT_INT64, INT64_MIN, INT64_MAX);
+        *(int64_t *)dst = parse_number(opt, arg, OPT_INT64, INT64_MIN, INT64_MAX, &ok);
     } else if (po->flags & OPT_TIME) {
-        *(int64_t *)dst = parse_time_or_die(opt, arg, 1);
+        *(int64_t *)dst = parse_time_or_die(opt, arg, 1, &ok);
     } else if (po->flags & OPT_FLOAT) {
-        *(float *)dst = parse_number_or_die(opt, arg, OPT_FLOAT, -INFINITY, INFINITY);
+        *(float *)dst = parse_number(opt, arg, OPT_FLOAT, -INFINITY, INFINITY, &ok);
     } else if (po->flags & OPT_DOUBLE) {
-        *(double *)dst = parse_number_or_die(opt, arg, OPT_DOUBLE, -INFINITY, INFINITY);
+        *(double *)dst = parse_number(opt, arg, OPT_DOUBLE, -INFINITY, INFINITY, &ok);
     } else if (po->u.func_arg) {
         int ret = po->u.func_arg(optctx, opt, arg);
         if (ret < 0) {
@@ -338,8 +350,11 @@ static int write_option(void *optctx, const OptionDef *po, const char *opt,
             return ret;
         }
     }
+    if(!ok){
+        return -1;
+    }
     if (po->flags & OPT_EXIT)
-        exit_program(0);
+        return -1;
 
     return 0;
 }
@@ -378,7 +393,7 @@ int parse_option(void *optctx, const char *opt, const char *arg,
 }
 
 void parse_options(void *optctx, int argc, char **argv, const OptionDef *options,
-                   void (*parse_arg_function)(void *, const char*))
+                   int (*parse_arg_function)(void *, const char*), int* ok)
 {
     const char *opt;
     int optindex, handleoptions = 1, ret;
@@ -398,13 +413,21 @@ void parse_options(void *optctx, int argc, char **argv, const OptionDef *options
             }
             opt++;
 
-            if ((ret = parse_option(optctx, opt, argv[optindex], options)) < 0)
-                exit_program(1);
+            if ((ret = parse_option(optctx, opt, argv[optindex], options)) < 0){
+                if(ok){
+                    (*ok)=0;
+                    return;
+                }
+            }
             optindex += ret;
         } else {
             if (parse_arg_function)
                 parse_arg_function(optctx, opt);
         }
+    }
+    if(ok){
+        (*ok)=1;
+        return;
     }
 }
 
@@ -700,7 +723,7 @@ static void add_opt(OptionParseContext *octx, const OptionDef *opt,
 }
 
 static void init_parse_context(OptionParseContext *octx,
-                               const OptionGroupDef *groups, int nb_groups)
+                               const OptionGroupDef *groups, int nb_groups, int* ok)
 {
     static const OptionGroupDef global_group = { "global" };
     int i;
@@ -709,8 +732,12 @@ static void init_parse_context(OptionParseContext *octx,
 
     octx->nb_groups = nb_groups;
     octx->groups    = av_mallocz_array(octx->nb_groups, sizeof(*octx->groups));
-    if (!octx->groups)
-        exit_program(1);
+    if (!octx->groups){
+        if(ok){
+            (*ok)=0;
+        }
+        return;
+    }
 
     for (i = 0; i < octx->nb_groups; i++)
         octx->groups[i].group_def = &groups[i];
@@ -719,6 +746,10 @@ static void init_parse_context(OptionParseContext *octx,
     octx->global_opts.arg       = "";
 
     init_opts();
+
+    if(ok){
+        (*ok)=1;
+    }
 }
 
 void uninit_parse_context(OptionParseContext *octx)
@@ -757,7 +788,11 @@ int split_commandline(OptionParseContext *octx, int argc, char *argv[],
     /* perform system-dependent conversions for arguments list */
     prepare_app_arguments(&argc, &argv);
 
-    init_parse_context(octx, groups, nb_groups);
+    int ok;
+    init_parse_context(octx, groups, nb_groups, &ok);
+    if(!ok){
+        return -1;
+    }
     av_log(NULL, AV_LOG_DEBUG, "Splitting the commandline.\n");
 
     while (optindex < argc) {
@@ -935,7 +970,7 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg)
                "Possible levels are numbers or:\n", arg);
         for (i = 0; i < FF_ARRAY_ELEMS(log_levels); i++)
             av_log(NULL, AV_LOG_FATAL, "\"%s\"\n", log_levels[i].name);
-        exit_program(1);
+        return -1;
     }
 
 end:
@@ -1007,7 +1042,7 @@ static int init_report(const char *env, const  char* program_name)
             report_file_level = strtol(val, &tail, 10);
             if (*tail) {
                 av_log(NULL, AV_LOG_FATAL, "Invalid report file level\n");
-                exit_program(1);
+                return -1;
             }
             envlevel = 1;
         } else {
@@ -1063,7 +1098,7 @@ int opt_max_alloc(void *optctx, const char *opt, const char *arg)
     max = strtol(arg, &tail, 10);
     if (*tail) {
         av_log(NULL, AV_LOG_FATAL, "Invalid max_alloc \"%s\".\n", arg);
-        exit_program(1);
+        return -1;
     }
     av_max_alloc(max);
     return 0;
@@ -1072,7 +1107,11 @@ int opt_max_alloc(void *optctx, const char *opt, const char *arg)
 int opt_timelimit(void *optctx, const char *opt, const char *arg)
 {
 #if HAVE_SETRLIMIT
-    int lim = parse_number_or_die(opt, arg, OPT_INT64, 0, INT_MAX);
+    int ok;
+    int lim = parse_number(opt, arg, OPT_INT64, 0, INT_MAX,&ok);
+    if(!ok){
+        return -1;
+    }
     struct rlimit rl = { lim, lim + 1 };
     if (setrlimit(RLIMIT_CPU, &rl))
         perror("setrlimit");
@@ -1135,13 +1174,17 @@ static void print_all_libs_info(int flags, int level)
     PRINT_LIB_INFO(avformat,   AVFORMAT,   flags, level);
     PRINT_LIB_INFO(avdevice,   AVDEVICE,   flags, level);
     PRINT_LIB_INFO(avfilter,   AVFILTER,   flags, level);
+#if CONFIG_AVRESAMPLE
     PRINT_LIB_INFO(avresample, AVRESAMPLE, flags, level);
+#endif
     PRINT_LIB_INFO(swscale,    SWSCALE,    flags, level);
     PRINT_LIB_INFO(swresample, SWRESAMPLE, flags, level);
+#if CONFIG_POSTPROC
     PRINT_LIB_INFO(postproc,   POSTPROC,   flags, level);
+#endif
 }
 
-static void print_program_info(int flags, int level, const char* program_name, const char* program_birth_year)
+static void print_program_info(int flags, int level, const char* program_name, int program_birth_year)
 {
     const char *indent = flags & INDENT? "  " : "";
 
@@ -1181,7 +1224,7 @@ static void print_buildconf(int flags, int level)
     }
 }
 
-void show_banner(int argc, char **argv, const OptionDef *options, const char *program_name, const char *program_birth_year)
+void show_banner(int argc, char **argv, const OptionDef *options, const char *program_name, int program_birth_year)
 {
     int idx = locate_option(argc, argv, options, "version");
     if (hide_banner || idx)
@@ -1192,7 +1235,7 @@ void show_banner(int argc, char **argv, const OptionDef *options, const char *pr
     print_all_libs_info(INDENT|SHOW_VERSION, AV_LOG_INFO);
 }
 
-int show_version(void *optctx, const char *opt, const char *arg, const char *program_name, const char *program_birth_year)
+int show_version(void *optctx, const char *opt, const char *arg, const char *program_name, int program_birth_year)
 {
     av_log_set_callback(log_callback_help);
     print_program_info (SHOW_COPYRIGHT, AV_LOG_INFO, program_name, program_birth_year);
@@ -1524,7 +1567,7 @@ static unsigned get_codecs_sorted(const AVCodecDescriptor ***rcodecs)
         nb_codecs++;
     if (!(codecs = av_calloc(nb_codecs, sizeof(*codecs)))) {
         av_log(NULL, AV_LOG_ERROR, "Out of memory\n");
-        exit_program(1);
+        exit(1);
     }
     desc = NULL;
     while ((desc = avcodec_descriptor_next(desc)))
@@ -2057,7 +2100,7 @@ FILE *get_preset_file(char *filename, size_t filename_size,
         av_strlcpy(filename, preset_name, filename_size);
         f = fopen(filename, "r");
     } else {
-#if HAVE_GETMODULEHANDLE && defined(_WIN32)
+#ifdef _WIN32
         char datadir[MAX_PATH], *ls;
         base[2] = NULL;
 
@@ -2102,7 +2145,8 @@ int check_stream_specifier(AVFormatContext *s, AVStream *st, const char *spec)
 }
 
 AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
-                                AVFormatContext *s, AVStream *st, AVCodec *codec)
+                                AVFormatContext *s, AVStream *st, AVCodec *codec,
+                                int* ok)
 {
     AVDictionary    *ret = NULL;
     AVDictionaryEntry *t = NULL;
@@ -2138,7 +2182,11 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
             switch (check_stream_specifier(s, st, p + 1)) {
             case  1: *p = 0; break;
             case  0:         continue;
-            default:         exit_program(1);
+            default:
+                if(ok){
+                    (*ok)=0;
+                }
+                return NULL;
             }
 
         if (av_opt_find(&cc, t->key, NULL, flags, AV_OPT_SEARCH_FAKE_OBJ) ||
@@ -2155,11 +2203,14 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
         if (p)
             *p = ':';
     }
+    if(ok){
+        (*ok)=1;
+    }
     return ret;
 }
 
 AVDictionary **setup_find_stream_info_opts(AVFormatContext *s,
-                                           AVDictionary *codec_opts)
+                                           AVDictionary *codec_opts, int* ok)
 {
     int i;
     AVDictionary **opts;
@@ -2172,9 +2223,14 @@ AVDictionary **setup_find_stream_info_opts(AVFormatContext *s,
                "Could not alloc memory for stream options.\n");
         return NULL;
     }
-    for (i = 0; i < s->nb_streams; i++)
+    for (i = 0; i < s->nb_streams; i++){
         opts[i] = filter_codec_opts(codec_opts, s->streams[i]->codecpar->codec_id,
-                                    s, s->streams[i], NULL);
+                                    s, s->streams[i], NULL, ok);
+        if(!(*ok)){
+            return opts;
+        }
+    }
+    *ok=1;
     return opts;
 }
 
@@ -2182,13 +2238,13 @@ void *grow_array(void *array, int elem_size, int *size, int new_size)
 {
     if (new_size >= INT_MAX / elem_size) {
         av_log(NULL, AV_LOG_ERROR, "Array too big.\n");
-        exit_program(1);
+        return NULL;
     }
     if (*size < new_size) {
         uint8_t *tmp = av_realloc_array(array, new_size, elem_size);
         if (!tmp) {
             av_log(NULL, AV_LOG_ERROR, "Could not alloc buffer.\n");
-            exit_program(1);
+            return NULL;
         }
         memset(tmp + *size*elem_size, 0, (new_size-*size) * elem_size);
         *size = new_size;
@@ -2373,4 +2429,8 @@ int show_sinks(void *optctx, const char *opt, const char *arg)
     return ret;
 }
 
+#endif
+
+#ifdef _MSC_VER
+#pragma warning( pop )
 #endif

@@ -34,10 +34,6 @@
 #undef main /* We don't want SDL to override our main() */
 #endif
 
-/**
- * program birth year, defined by the program for show_banner()
- */
-extern const int ffmpeg_program_birth_year;
 
 extern AVCodecContext *avcodec_opts[AVMEDIA_TYPE_NB];
 extern AVFormatContext *avformat_opts;
@@ -45,16 +41,6 @@ extern AVDictionary *sws_dict;
 extern AVDictionary *swr_opts;
 extern AVDictionary *format_opts, *codec_opts, *resample_opts;
 extern int hide_banner;
-
-/**
- * Register a program-specific cleanup routine.
- */
-void register_exit(void (*cb)(int ret));
-
-/**
- * Wraps exit with a program-specific cleanup routine.
- */
-void exit_program(int ret) av_noreturn;
 
 /**
  * Initialize dynamic library loading
@@ -118,8 +104,8 @@ int opt_timelimit(void *optctx, const char *opt, const char *arg);
  * @param min the minimum valid accepted value
  * @param max the maximum valid accepted value
  */
-double parse_number_or_die(const char *context, const char *numstr, int type,
-                           double min, double max);
+double parse_number(const char *context, const char *numstr, int type,
+                           double min, double max, int *ok);
 
 /**
  * Parse a string specifying a time and return its corresponding
@@ -136,7 +122,7 @@ double parse_number_or_die(const char *context, const char *numstr, int type,
  * @see av_parse_time()
  */
 int64_t parse_time_or_die(const char *context, const char *timestr,
-                          int is_duration);
+                          int is_duration, int *ok);
 
 typedef struct SpecifierOpt {
     char *specifier;    /**< stream/chapter/program/... specifier */
@@ -241,7 +227,7 @@ void show_help_options(const OptionDef *options, const char *msg, int req_flags,
  * Show help for all options with given flags in class and all its
  * children.
  */
-void show_help_children(const AVClass *class, int flags);
+void show_help_children(const AVClass *cl, int flags);
 
 /**
  * Per-fftool specific help handler. Implemented in each
@@ -267,7 +253,7 @@ int show_help(void *optctx, const char *opt, const char *arg);
  * not have to be processed.
  */
 void parse_options(void *optctx, int argc, char **argv, const OptionDef *options,
-                   void (* parse_arg_function)(void *optctx, const char*));
+                   int (*parse_arg_function)(void *, const char *), int* ok);
 
 /**
  * Parse one given option.
@@ -409,7 +395,7 @@ int check_stream_specifier(AVFormatContext *s, AVStream *st, const char *spec);
  * @return a pointer to the created dictionary
  */
 AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
-                                AVFormatContext *s, AVStream *st, AVCodec *codec);
+                                AVFormatContext *s, AVStream *st, AVCodec *codec, int *ok);
 
 /**
  * Setup AVCodecContext options for avformat_find_stream_info().
@@ -423,7 +409,7 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
  * cannot be created
  */
 AVDictionary **setup_find_stream_info_opts(AVFormatContext *s,
-                                           AVDictionary *codec_opts);
+                                           AVDictionary *codec_opts, int *ok);
 
 /**
  * Print an error message to stderr, indicating filename and a human
@@ -441,7 +427,7 @@ void print_error(const char *filename, int err);
  * current version of the repository and of the libav* libraries used by
  * the program.
  */
-void show_banner(int argc, char **argv, const OptionDef *options, const char* program_name, const char* program_birth_year);
+void show_banner(int argc, char **argv, const OptionDef *options, const char* program_name, int program_birth_year);
 
 /**
  * Print the version of the program to stdout. The version message
@@ -449,7 +435,7 @@ void show_banner(int argc, char **argv, const OptionDef *options, const char* pr
  * libraries.
  * This option processing function does not utilize the arguments.
  */
-int show_version(void *optctx, const char *opt, const char *arg, const char *program_name, const char *program_birth_year);
+int show_version(void *optctx, const char *opt, const char *arg, const char *program_name, int program_birth_year);
 
 /**
  * Print the build configuration of the program to stdout. The contents

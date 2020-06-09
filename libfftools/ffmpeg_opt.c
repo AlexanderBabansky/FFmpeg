@@ -3208,8 +3208,8 @@ void show_help_default(const char *opt, const char *arg)
            "    -h long -- print more options\n"
            "    -h full -- print all options (including all format and codec specific options, very long)\n"
            "    -h type=name -- print all options for the named decoder/encoder/demuxer/muxer/filter/bsf/protocol\n"
-           "    See man %s for detailed description of the options.\n"
-           "\n", program_name);
+           "    See man ffmpeg for detailed description of the options.\n"
+           "\n");
 
     show_help_options(options, "Print help / information / capabilities:",
                       OPT_EXIT, 0, 0);
@@ -3261,7 +3261,7 @@ void show_help_default(const char *opt, const char *arg)
 void show_usage(void)
 {
     av_log(NULL, AV_LOG_INFO, "Hyper fast Audio and Video encoder\n");
-    av_log(NULL, AV_LOG_INFO, "usage: %s [options] [[infile options] -i infile]... {[outfile options] outfile}...\n", program_name);
+    av_log(NULL, AV_LOG_INFO, "usage: ffmpeg [options] [[infile options] -i infile]... {[outfile options] outfile}...\n");
     av_log(NULL, AV_LOG_INFO, "\n");
 }
 

@@ -79,9 +79,6 @@ typedef struct InputFile {
     int       nb_streams;
 } InputFile;
 
-const char program_name[] = "ffprobe";
-const int program_birth_year = 2007;
-
 static int do_bitexact = 0;
 static int do_count_frames = 0;
 static int do_count_packets = 0;
@@ -3074,7 +3071,7 @@ end:
 static void show_usage(void)
 {
     av_log(NULL, AV_LOG_INFO, "Simple multimedia streams analyzer\n");
-    av_log(NULL, AV_LOG_INFO, "usage: %s [OPTIONS] [INPUT_FILE]\n", program_name);
+    av_log(NULL, AV_LOG_INFO, "usage: ffprobe [OPTIONS] [INPUT_FILE]\n");
     av_log(NULL, AV_LOG_INFO, "\n");
 }
 
@@ -3085,8 +3082,8 @@ static void ffprobe_show_program_version(WriterContext *w)
 
     writer_print_section_header(w, SECTION_ID_PROGRAM_VERSION);
     print_str("version", FFMPEG_VERSION);
-    print_fmt("copyright", "Copyright (c) %d-%d the FFmpeg developers",
-              program_birth_year, CONFIG_THIS_YEAR);
+    print_fmt("copyright", "Copyright (c) 2007-%d the FFmpeg developers",
+              CONFIG_THIS_YEAR);
     print_str("compiler_ident", CC_IDENT);
     print_str("configuration", FFMPEG_CONFIGURATION);
     writer_print_section_footer(w);
@@ -3312,7 +3309,7 @@ static int opt_print_filename(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-void show_help_default(const char *opt, const char *arg)
+void show_ffprobe_help_default(const char *opt, const char *arg)
 {
     av_log_set_callback(log_callback_help);
     show_usage();
@@ -3593,7 +3590,7 @@ static inline int check_section_show_entries(int section_id)
             do_show_##varname = 1;                                      \
     } while (0)
 
-int main(int argc, char **argv)
+int ffprobe_main(int argc, char **argv)
 {
     const Writer *w;
     WriterContext *wctx;
@@ -3613,14 +3610,14 @@ int main(int argc, char **argv)
     register_exit(ffprobe_cleanup);
 
     options = real_options;
-    parse_loglevel(argc, argv, options);
+    parse_loglevel(argc, argv, options, "ffprobe");
     avformat_network_init();
     init_opts();
 #if CONFIG_AVDEVICE
     avdevice_register_all();
 #endif
 
-    show_banner(argc, argv, options);
+    show_banner(argc, argv, options, "ffprobe", "2007");
     parse_options(NULL, argc, argv, options, opt_input_file);
 
     if (do_show_log)
@@ -3716,7 +3713,7 @@ int main(int argc, char **argv)
              (!do_show_program_version && !do_show_library_versions && !do_show_pixel_formats))) {
             show_usage();
             av_log(NULL, AV_LOG_ERROR, "You have to specify one input file.\n");
-            av_log(NULL, AV_LOG_ERROR, "Use -h to get full help or, even better, run 'man %s'.\n", program_name);
+            av_log(NULL, AV_LOG_ERROR, "Use -h to get full help or, even better, run 'man ffprobe'.\n");
             ret = AVERROR(EINVAL);
         } else if (input_filename) {
             ret = probe_file(wctx, input_filename, print_input_filename);

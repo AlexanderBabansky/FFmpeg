@@ -63,7 +63,7 @@
 #include <windows.h>
 #endif
 
-static int init_report(const char *env);
+static int init_report(const char *env, const char *program_name);
 
 AVDictionary *sws_dict;
 AVDictionary *swr_opts;
@@ -500,7 +500,7 @@ static void check_options(const OptionDef *po)
     }
 }
 
-void parse_loglevel(int argc, char **argv, const OptionDef *options)
+void parse_loglevel(int argc, char **argv, const OptionDef *options, const char* program_name)
 {
     int idx = locate_option(argc, argv, options, "loglevel");
     const char *env;
@@ -513,7 +513,7 @@ void parse_loglevel(int argc, char **argv, const OptionDef *options)
         opt_loglevel(NULL, "loglevel", argv[idx + 1]);
     idx = locate_option(argc, argv, options, "report");
     if ((env = getenv("FFREPORT")) || idx) {
-        init_report(env);
+        init_report(env, program_name);
         if (report_file) {
             int i;
             fprintf(report_file, "Command line:\n");
@@ -945,7 +945,7 @@ end:
 }
 
 static void expand_filename_template(AVBPrint *bp, const char *template,
-                                     struct tm *tm)
+                                     struct tm *tm, const char* program_name)
 {
     int c;
 
@@ -972,7 +972,7 @@ static void expand_filename_template(AVBPrint *bp, const char *template,
     }
 }
 
-static int init_report(const char *env)
+static int init_report(const char *env, const  char* program_name)
 {
     char *filename_template = NULL;
     char *key, *val;
@@ -1019,7 +1019,7 @@ static int init_report(const char *env)
 
     av_bprint_init(&filename, 0, AV_BPRINT_SIZE_AUTOMATIC);
     expand_filename_template(&filename,
-                             av_x_if_null(filename_template, "%p-%t.log"), tm);
+                             av_x_if_null(filename_template, "%p-%t.log"), tm, program_name);
     av_free(filename_template);
     if (!av_bprint_is_complete(&filename)) {
         av_log(NULL, AV_LOG_ERROR, "Out of memory building report file name\n");
@@ -1050,9 +1050,9 @@ static int init_report(const char *env)
     return 0;
 }
 
-int opt_report(void *optctx, const char *opt, const char *arg)
+int opt_report(void *optctx, const char *opt, const char *arg, const char* program_name)
 {
-    return init_report(NULL);
+    return init_report(NULL, program_name);
 }
 
 int opt_max_alloc(void *optctx, const char *opt, const char *arg)
@@ -1141,7 +1141,7 @@ static void print_all_libs_info(int flags, int level)
     PRINT_LIB_INFO(postproc,   POSTPROC,   flags, level);
 }
 
-static void print_program_info(int flags, int level)
+static void print_program_info(int flags, int level, const char* program_name, const char* program_birth_year)
 {
     const char *indent = flags & INDENT? "  " : "";
 
@@ -1181,21 +1181,21 @@ static void print_buildconf(int flags, int level)
     }
 }
 
-void show_banner(int argc, char **argv, const OptionDef *options)
+void show_banner(int argc, char **argv, const OptionDef *options, const char *program_name, const char *program_birth_year)
 {
     int idx = locate_option(argc, argv, options, "version");
     if (hide_banner || idx)
         return;
 
-    print_program_info (INDENT|SHOW_COPYRIGHT, AV_LOG_INFO);
+    print_program_info (INDENT|SHOW_COPYRIGHT, AV_LOG_INFO, program_name, program_birth_year);
     print_all_libs_info(INDENT|SHOW_CONFIG,  AV_LOG_INFO);
     print_all_libs_info(INDENT|SHOW_VERSION, AV_LOG_INFO);
 }
 
-int show_version(void *optctx, const char *opt, const char *arg)
+int show_version(void *optctx, const char *opt, const char *arg, const char *program_name, const char *program_birth_year)
 {
     av_log_set_callback(log_callback_help);
-    print_program_info (SHOW_COPYRIGHT, AV_LOG_INFO);
+    print_program_info (SHOW_COPYRIGHT, AV_LOG_INFO, program_name, program_birth_year);
     print_all_libs_info(SHOW_VERSION, AV_LOG_INFO);
 
     return 0;
@@ -1209,7 +1209,7 @@ int show_buildconf(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-int show_license(void *optctx, const char *opt, const char *arg)
+int show_license(void *optctx, const char *opt, const char *arg, const char* program_name)
 {
 #if CONFIG_NONFREE
     printf(

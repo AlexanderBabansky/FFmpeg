@@ -113,9 +113,7 @@ Configuration options:
 
 Program options:
   --disable-programs       do not build command line programs
-  --disable-ffmpeg         disable ffmpeg build
-  --disable-ffplay         disable ffplay build
-  --disable-ffprobe        disable ffprobe build
+  --disable-fftools        disable fftools build
 
 Documentation options:
   --disable-doc            do not build documentation
@@ -1896,6 +1894,7 @@ LIBRARY_LIST="
     swresample
     avresample
     avutil
+    fftools
 "
 
 LICENSE_LIST="
@@ -1905,9 +1904,6 @@ LICENSE_LIST="
 "
 
 PROGRAM_LIST="
-    ffplay
-    ffprobe
-    ffmpeg
 "
 
 SUBSYSTEM_LIST="
@@ -3689,16 +3685,11 @@ avfilter_extralibs="pthreads_extralibs"
 avutil_extralibs="d3d11va_extralibs nanosleep_extralibs pthreads_extralibs vaapi_drm_extralibs vaapi_x11_extralibs vdpau_x11_extralibs"
 
 # programs
-ffmpeg_deps="avcodec avfilter avformat"
-ffmpeg_select="aformat_filter anull_filter atrim_filter format_filter
+fftools_deps="avcodec avdevice avfilter avformat swscale swresample"
+fftools_select="aformat_filter anull_filter atrim_filter format_filter
                hflip_filter null_filter
                transpose_filter trim_filter vflip_filter"
-ffmpeg_suggest="ole32 psapi shell32"
-ffplay_deps="avcodec avformat swscale swresample sdl2"
-ffplay_select="rdft crop_filter transpose_filter hflip_filter vflip_filter rotate_filter"
-ffplay_suggest="shell32"
-ffprobe_deps="avcodec avformat"
-ffprobe_suggest="shell32"
+fftools_suggest="ole32 psapi shell32"
 
 # documentation
 podpages_deps="perl"
@@ -7478,7 +7469,6 @@ HOSTLD_O=$HOSTLD_O
 TARGET_EXEC=$target_exec $target_exec_args
 TARGET_PATH=$target_path
 TARGET_SAMPLES=${target_samples:-\$(SAMPLES)}
-CFLAGS-ffplay=${sdl2_cflags}
 CFLAGS_HEADERS=$CFLAGS_HEADERS
 LIB_INSTALL_EXTRA_CMD=$LIB_INSTALL_EXTRA_CMD
 EXTRALIBS=$extralibs

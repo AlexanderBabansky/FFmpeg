@@ -106,9 +106,6 @@
 
 #include "libavutil/avassert.h"
 
-const char program_name[] = "ffmpeg";
-const int program_birth_year = 2000;
-
 static FILE *vstats_file;
 
 const char *const forced_keyframes_const_names[] = {
@@ -4816,7 +4813,7 @@ static void log_callback_null(void *ptr, int level, const char *fmt, va_list vl)
 {
 }
 
-int main(int argc, char **argv)
+int ffmpeg_main(int argc, char **argv)
 {
     int i, ret;
     BenchmarkTimeStamps ti;
@@ -4828,7 +4825,7 @@ int main(int argc, char **argv)
     setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */
 
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
-    parse_loglevel(argc, argv, options);
+    parse_loglevel(argc, argv, options, "ffmpeg");
 
     if(argc>1 && !strcmp(argv[1], "-d")){
         run_as_daemon=1;
@@ -4842,7 +4839,7 @@ int main(int argc, char **argv)
 #endif
     avformat_network_init();
 
-    show_banner(argc, argv, options);
+    show_banner(argc, argv, options, "ffmpeg", "2000");
 
     /* parse options and open all input/output files */
     ret = ffmpeg_parse_options(argc, argv);
@@ -4851,7 +4848,7 @@ int main(int argc, char **argv)
 
     if (nb_output_files <= 0 && nb_input_files == 0) {
         show_usage();
-        av_log(NULL, AV_LOG_WARNING, "Use -h to get full help or, even better, run 'man %s'\n", program_name);
+        av_log(NULL, AV_LOG_WARNING, "Use -h to get full help or, even better, run 'man ffmpeg'\n");
         exit_program(1);
     }
 

@@ -35,14 +35,9 @@
 #endif
 
 /**
- * program name, defined by the program for show_version().
- */
-extern const char program_name[];
-
-/**
  * program birth year, defined by the program for show_banner()
  */
-extern const int program_birth_year;
+extern const int ffmpeg_program_birth_year;
 
 extern AVCodecContext *avcodec_opts[AVMEDIA_TYPE_NB];
 extern AVFormatContext *avformat_opts;
@@ -99,7 +94,7 @@ int opt_default(void *optctx, const char *opt, const char *arg);
  */
 int opt_loglevel(void *optctx, const char *opt, const char *arg);
 
-int opt_report(void *optctx, const char *opt, const char *arg);
+int opt_report(void *optctx, const char *opt, const char *arg, const char *program_name);
 
 int opt_max_alloc(void *optctx, const char *opt, const char *arg);
 
@@ -380,7 +375,7 @@ void uninit_parse_context(OptionParseContext *octx);
 /**
  * Find the '-loglevel' option in the command line args and apply it.
  */
-void parse_loglevel(int argc, char **argv, const OptionDef *options);
+void parse_loglevel(int argc, char **argv, const OptionDef *options, const char *program_name);
 
 /**
  * Return index of option opt in argv or 0 if not found.
@@ -446,7 +441,7 @@ void print_error(const char *filename, int err);
  * current version of the repository and of the libav* libraries used by
  * the program.
  */
-void show_banner(int argc, char **argv, const OptionDef *options);
+void show_banner(int argc, char **argv, const OptionDef *options, const char* program_name, const char* program_birth_year);
 
 /**
  * Print the version of the program to stdout. The version message
@@ -454,7 +449,7 @@ void show_banner(int argc, char **argv, const OptionDef *options);
  * libraries.
  * This option processing function does not utilize the arguments.
  */
-int show_version(void *optctx, const char *opt, const char *arg);
+int show_version(void *optctx, const char *opt, const char *arg, const char *program_name, const char *program_birth_year);
 
 /**
  * Print the build configuration of the program to stdout. The contents
@@ -468,7 +463,7 @@ int show_buildconf(void *optctx, const char *opt, const char *arg);
  * the license of the libraries compiled into the program.
  * This option processing function does not utilize the arguments.
  */
-int show_license(void *optctx, const char *opt, const char *arg);
+int show_license(void *optctx, const char *opt, const char *arg, const char* program_name);
 
 /**
  * Print a listing containing all the formats supported by the

@@ -112,9 +112,10 @@ static const char *opt_name_enc_time_bases[]            = {"enc_time_base", NULL
             outvar = o->name[i].u.type;\
             so = &o->name[i];\
             matches++;\
-        } else if (ret < 0)\
+        } else if (ret < 0) {\
             *ok = 0; \
             return returnValue;\
+        }\
     }\
     if (matches > 1)\
        WARN_MULTIPLE_OPT_USAGE(name, type, so, st);\

@@ -163,8 +163,8 @@ int         nb_output_streams = 0;
 OutputFile   **output_files   = NULL;
 int         nb_output_files   = 0;
 
-FilterGraph **filtergraphs;
-int        nb_filtergraphs;
+FilterGraph **filtergraphs = NULL;
+int        nb_filtergraphs = 0;
 
 #if HAVE_TERMIOS_H
 
@@ -549,6 +549,7 @@ static void ffmpeg_cleanup(int ret)
         av_freep(&filtergraphs[i]);
     }
     av_freep(&filtergraphs);
+    nb_filtergraphs = 0;
 
     av_freep(&subtitle_out);
 
@@ -639,6 +640,10 @@ static void ffmpeg_cleanup(int ret)
     av_freep(&input_files);
     av_freep(&output_streams);
     av_freep(&output_files);
+    nb_input_streams = 0;
+    nb_input_files = 0;
+    nb_output_streams = 0;
+    nb_output_files = 0;
 
     uninit_opts();
 
@@ -1649,7 +1654,11 @@ static void print_final_stats(int64_t total_size)
     }
 }
 
-static void print_report(int is_last_report, int64_t timer_start, int64_t cur_time)
+static void print_report(int is_last_report,
+                         int64_t timer_start,
+                         int64_t cur_time,
+                         int *processingFrameNumberOut,
+                         float *processingSecondOut)
 {
     AVBPrint buf, buf_script;
     OutputStream *ost;
@@ -1708,6 +1717,9 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
             float fps;
 
             frame_number = ost->frame_number;
+            if (processingFrameNumberOut) {
+                *processingFrameNumberOut = frame_number;
+            }
             fps = t > 1 ? frame_number / t : 0;
             av_bprintf(&buf, "frame=%5d fps=%3.*f q=%3.1f ",
                      frame_number, fps < 9.95, fps, q);
@@ -1767,6 +1779,9 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
 
     secs = FFABS(pts) / AV_TIME_BASE;
     us = FFABS(pts) % AV_TIME_BASE;
+    if (processingSecondOut) {
+        *processingSecondOut = secs + 1.0f * us / AV_TIME_BASE;
+    }
     mins = secs / 60;
     secs %= 60;
     hours = mins / 60;
@@ -4691,7 +4706,7 @@ static int transcode_step(void)
 /*
  * The following code is the main loop of the file converter
  */
-static int transcode(void)
+static int transcode(int *interruptFlag, int *processingFrameNumberOut, float *processingSecondOut)
 {
     int ret, i;
     AVFormatContext *os;
@@ -4716,6 +4731,12 @@ static int transcode(void)
 #endif
 
     while (!received_sigterm) {
+        if(interruptFlag && *interruptFlag){
+            av_log(NULL, AV_LOG_ERROR,
+                   "Transcode interrupted by user\n");
+            ret = -1;
+            goto fail;
+        }
         int64_t cur_time= av_gettime_relative();
 
         /* if 'q' pressed, exits */
@@ -4736,7 +4757,7 @@ static int transcode(void)
         }
 
         /* dump report by using the output first video and audio streams */
-        print_report(0, timer_start, cur_time);
+        print_report(0, timer_start, cur_time, processingFrameNumberOut, processingSecondOut);
     }
 #if HAVE_THREADS
     free_input_threads();
@@ -4749,8 +4770,8 @@ static int transcode(void)
             process_input_packet(ist, NULL, 0);
         }
     }
-    if(flush_encoders()){
-        return -1;
+    if ((ret = flush_encoders()) < 0) {
+        goto fail;
     }
 
     term_exit();
@@ -4768,12 +4789,12 @@ static int transcode(void)
         if ((ret = av_write_trailer(os)) < 0) {
             av_log(NULL, AV_LOG_ERROR, "Error writing trailer of %s: %s\n", os->url, av_err2str(ret));
             if (exit_on_error)
-                return -1;
+                goto fail;
         }
     }
 
     /* dump report by using the first video and audio streams */
-    print_report(1, timer_start, av_gettime_relative());
+    print_report(1, timer_start, av_gettime_relative(), processingFrameNumberOut, processingSecondOut);
 
     /* close each encoder */
     for (i = 0; i < nb_output_streams; i++) {
@@ -4784,13 +4805,13 @@ static int transcode(void)
         total_packets_written += ost->packets_written;
         if (!ost->packets_written && (abort_on_flags & ABORT_ON_FLAG_EMPTY_OUTPUT_STREAM)) {
             av_log(NULL, AV_LOG_FATAL, "Empty output on stream %d.\n", i);
-            return -1;
+            goto fail;
         }
     }
 
     if (!total_packets_written && (abort_on_flags & ABORT_ON_FLAG_EMPTY_OUTPUT)) {
         av_log(NULL, AV_LOG_FATAL, "Empty output\n");
-        return -1;
+        goto fail;
     }
 
     /* close each decoder */
@@ -4885,7 +4906,11 @@ static void log_callback_null(void *ptr, int level, const char *fmt, va_list vl)
 {
 }
 
-int ffmpeg_main(int argc, char **argv)
+int ffmpeg_main(int argc,
+                char **argv,
+                int *interruptFlag,
+                int *processingFrameNumberOut,
+                float *processingSecondOut)
 {
     int i, ret;
     BenchmarkTimeStamps ti;
@@ -4914,18 +4939,20 @@ int ffmpeg_main(int argc, char **argv)
     /* parse options and open all input/output files */
     ret = ffmpeg_parse_options(argc, argv);
     if (ret < 0)
-        return -1;
+        goto cleanup;
 
     if (nb_output_files <= 0 && nb_input_files == 0) {
         show_usage();
         av_log(NULL, AV_LOG_WARNING, "Use -h to get full help or, even better, run 'man ffmpeg'\n");
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
 
     /* file converter / grab */
     if (nb_output_files <= 0) {
         av_log(NULL, AV_LOG_FATAL, "At least one output file must be specified\n");
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
 
     for (i = 0; i < nb_output_files; i++) {
@@ -4934,8 +4961,9 @@ int ffmpeg_main(int argc, char **argv)
     }
 
     current_time = ti = get_benchmark_time_stamps();
-    if (transcode() < 0)
-        return -1;
+    if ((ret = transcode(interruptFlag, processingFrameNumberOut, processingSecondOut)) < 0) {
+        goto cleanup;
+    }
     if (do_benchmark) {
         int64_t utime, stime, rtime;
         current_time = get_benchmark_time_stamps();
@@ -4948,11 +4976,14 @@ int ffmpeg_main(int argc, char **argv)
     }
     av_log(NULL, AV_LOG_DEBUG, "%"PRIu64" frames successfully decoded, %"PRIu64" decoding errors\n",
            decode_error_stat[0], decode_error_stat[1]);
-    if ((decode_error_stat[0] + decode_error_stat[1]) * max_error_rate < decode_error_stat[1])
-        return 69;
+    if ((decode_error_stat[0] + decode_error_stat[1]) * max_error_rate < decode_error_stat[1]){
+        ret = 69;
+        goto cleanup;
+    }
 
     ret=(received_nb_signals ? 255 : main_return_code);
 
+cleanup:
     ffmpeg_cleanup(ret);
 
     return ret;

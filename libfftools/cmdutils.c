@@ -34,6 +34,9 @@
 #undef HAVE_COMMANDLINETOARGVW
 #define HAVE_COMMANDLINETOARGVW 0
 
+#undef HAVE_SETDLLDIRECTORY
+#define HAVE_SETDLLDIRECTORY 0
+
 #include "compat/va_copy.h"
 #include "libavformat/avformat.h"
 #include "libavfilter/avfilter.h"

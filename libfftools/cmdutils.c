@@ -30,6 +30,10 @@
    references to libraries that are not being built. */
 
 #include "config.h"
+
+#undef HAVE_COMMANDLINETOARGVW
+#define HAVE_COMMANDLINETOARGVW 0
+
 #include "compat/va_copy.h"
 #include "libavformat/avformat.h"
 #include "libavfilter/avfilter.h"

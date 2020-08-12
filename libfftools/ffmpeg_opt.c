@@ -1631,7 +1631,7 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
     ost->copy_prior_start = -1;
     MATCH_PER_STREAM_OPT(copy_prior_start, i, ost->copy_prior_start, oc ,st, ost);
 
-    MATCH_PER_STREAM_OPT(bitstream_filters, str, bsfs, oc, st);
+    MATCH_PER_STREAM_OPT(bitstream_filters, str, bsfs, oc, st, ost);
     if (bsfs && *bsfs) {
         ret = av_bsf_list_parse_str(bsfs, &ost->bsf_ctx);
         if (ret < 0) {

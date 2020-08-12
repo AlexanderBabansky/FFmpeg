@@ -149,7 +149,7 @@ typedef struct ProbeContext {
     int *selected_streams;
 } ProbeContext;
 
-void initProbeContext(ProbeContext* probeCtx){
+static void initProbeContext(ProbeContext* probeCtx){
     memset(probeCtx, 0, sizeof(ProbeContext));
     probeCtx->show_private_data = 1;
     probeCtx->find_stream_info = 1;
@@ -3347,7 +3347,7 @@ static int opt_print_filename(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-void show_ffprobe_help_default(const char *opt, const char *arg, const OptionDef *options, ProbeContext* probeCtx)
+static void show_ffprobe_help_default(const char *opt, const char *arg, const OptionDef *options, ProbeContext* probeCtx)
 {
     av_log_set_callback(log_callback_help);
     show_usage();

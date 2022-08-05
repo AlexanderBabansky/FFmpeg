@@ -384,7 +384,7 @@ static int hap_decode(AVCodecContext *avctx, void *data,
 
         /* Use the decompress function on the texture, one block per thread */
         if (t == 0){
-            avctx->execute2(avctx, decompress_texture_thread, tframe.f, NULL, ctx->slice_count);
+            memcpy(tframe.f->data[0], ctx->tex_data, ctx->tex_size);
         } else{
             tframe.f = data;
             avctx->execute2(avctx, decompress_texture2_thread, tframe.f, NULL, ctx->slice_count);
@@ -425,7 +425,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
         texture_name = "DXT1";
         ctx->tex_rat = 8;
         ctx->tex_fun = ctx->dxtc.dxt1_block;
-        avctx->pix_fmt = AV_PIX_FMT_RGB0;
+        avctx->pix_fmt = AV_PIX_FMT_GL_DXT1;
         break;
     case MKTAG('H','a','p','5'):
         texture_name = "DXT5";
@@ -437,7 +437,7 @@ static av_cold int hap_init(AVCodecContext *avctx)
         texture_name = "DXT5-YCoCg-scaled";
         ctx->tex_rat = 16;
         ctx->tex_fun = ctx->dxtc.dxt5ys_block;
-        avctx->pix_fmt = AV_PIX_FMT_RGB0;
+        avctx->pix_fmt = AV_PIX_FMT_GL_DXT5_YCoCg;
         break;
     case MKTAG('H','a','p','A'):
         texture_name = "RGTC1";

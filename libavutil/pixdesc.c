@@ -2371,6 +2371,26 @@ static const AVPixFmtDescriptor av_pix_fmt_descriptors[AV_PIX_FMT_NB] = {
         .name = "vulkan",
         .flags = AV_PIX_FMT_FLAG_HWACCEL,
     },
+    [AV_PIX_FMT_GL_DXT1] = {
+        .name = "dxt1",
+        .nb_components = 1,
+        .log2_chroma_w = 0,
+        .log2_chroma_h = 0,
+        .comp = {
+            { 0, 4, 0, 4, 4, 3, 3, 1 },        /* Y */
+        },
+        .flags = AV_PIX_FMT_FLAG_BITSTREAM,
+    },
+    [AV_PIX_FMT_GL_DXT5_YCoCg] = {
+        .name = "dxt5ycocg",
+        .nb_components = 1,
+        .log2_chroma_w = 0,
+        .log2_chroma_h = 0,
+        .comp = {
+            { 0, 8, 0, 0, 8, 7, 7, 1 },        /* Y */
+        },
+        .flags = AV_PIX_FMT_FLAG_BITSTREAM,
+        },
 };
 #if FF_API_PLUS1_MINUS1
 FF_ENABLE_DEPRECATION_WARNINGS

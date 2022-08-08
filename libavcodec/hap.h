@@ -77,6 +77,8 @@ typedef struct HapContext {
     const uint8_t *tex_data; /* Compressed texture */
     uint8_t *tex_buf;        /* Buffer for compressed texture */
     size_t tex_size;         /* Size of the compressed texture */
+    int64_t s3tc;    /* 0: Use libav uncompressing software implementation
+                        1: Output s3tc*/
 
     size_t max_snappy;       /* Maximum compressed size for snappy buffer */
 

@@ -382,12 +382,18 @@ static int hap_decode(AVCodecContext *avctx, void *data,
             ctx->tex_data = ctx->tex_buf;
         }
 
-        /* Use the decompress function on the texture, one block per thread */
-        if (t == 0){
-            memcpy(tframe.f->data[0], ctx->tex_data, ctx->tex_size);
-        } else{
-            tframe.f = data;
-            avctx->execute2(avctx, decompress_texture2_thread, tframe.f, NULL, ctx->slice_count);
+        if (ctx->s3tc == 0) {
+            /* Use the decompress function on the texture, one block per thread */
+            if (t == 0) {
+                avctx->execute2(avctx, decompress_texture_thread, tframe.f, NULL, ctx->slice_count);
+            }
+            else {
+                tframe.f = data;
+                avctx->execute2(avctx, decompress_texture2_thread, tframe.f, NULL, ctx->slice_count);
+            }
+        }
+        else {
+            memcpy(tframe.f->data[t], ctx->tex_data, ctx->tex_size);
         }
     }
 
@@ -420,30 +426,35 @@ static av_cold int hap_init(AVCodecContext *avctx)
     ctx->texture_count  = 1;
     ctx->uncompress_pix_size = 4;
 
+    enum AVPixelFormat sw_pix_fmt = -1;
+    enum AVPixelFormat hw_pix_fmt = -1;
+
     switch (avctx->codec_tag) {
     case MKTAG('H','a','p','1'):
         texture_name = "DXT1";
         ctx->tex_rat = 8;
         ctx->tex_fun = ctx->dxtc.dxt1_block;
-        avctx->pix_fmt = AV_PIX_FMT_GL_DXT1;
+        sw_pix_fmt = AV_PIX_FMT_RGB0;
+        hw_pix_fmt = AV_PIX_FMT_GL_DXT1;
         break;
     case MKTAG('H','a','p','5'):
         texture_name = "DXT5";
         ctx->tex_rat = 16;
         ctx->tex_fun = ctx->dxtc.dxt5_block;
-        avctx->pix_fmt = AV_PIX_FMT_RGBA;
+        sw_pix_fmt = AV_PIX_FMT_RGBA;
         break;
     case MKTAG('H','a','p','Y'):
         texture_name = "DXT5-YCoCg-scaled";
         ctx->tex_rat = 16;
         ctx->tex_fun = ctx->dxtc.dxt5ys_block;
-        avctx->pix_fmt = AV_PIX_FMT_GL_DXT5_YCoCg;
+        sw_pix_fmt = AV_PIX_FMT_RGB0;
+        hw_pix_fmt = AV_PIX_FMT_GL_DXT5_YCoCg;
         break;
     case MKTAG('H','a','p','A'):
         texture_name = "RGTC1";
         ctx->tex_rat = 8;
         ctx->tex_fun = ctx->dxtc.rgtc1u_gray_block;
-        avctx->pix_fmt = AV_PIX_FMT_GRAY8;
+        sw_pix_fmt = AV_PIX_FMT_GRAY8;
         ctx->uncompress_pix_size = 1;
         break;
     case MKTAG('H','a','p','M'):
@@ -452,11 +463,20 @@ static av_cold int hap_init(AVCodecContext *avctx)
         ctx->tex_rat2 = 8;
         ctx->tex_fun  = ctx->dxtc.dxt5ys_block;
         ctx->tex_fun2 = ctx->dxtc.rgtc1u_alpha_block;
-        avctx->pix_fmt = AV_PIX_FMT_RGBA;
+        hw_pix_fmt = AV_PIX_FMT_GL_DXT5_YCoCg_RGTC1;
+        sw_pix_fmt = AV_PIX_FMT_RGBA;
         ctx->texture_count = 2;
         break;
     default:
         return AVERROR_DECODER_NOT_FOUND;
+    }
+
+    if (ctx->s3tc == 1 && hw_pix_fmt != AV_PIX_FMT_NONE){
+        avctx->pix_fmt = hw_pix_fmt;
+    }
+    else {
+        avctx->pix_fmt = sw_pix_fmt;
+        ctx->s3tc = 0;
     }
 
     av_log(avctx, AV_LOG_DEBUG, "%s texture\n", texture_name);
@@ -476,6 +496,22 @@ static av_cold int hap_close(AVCodecContext *avctx)
     return 0;
 }
 
+
+#define OFFSET(x) offsetof(HapContext, x)
+#define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_DECODING_PARAM
+
+const AVOption options[] = {
+    { "s3tc","1: get S3TC compressed texture, 0: use libav decompressing software implementation ", OFFSET(s3tc), AV_OPT_TYPE_INT64, {.i64 = 0 }, 0, 1, VE},
+    { NULL }
+};
+
+static const AVClass hap_class = {
+    .class_name = "hap",
+    .item_name = av_default_item_name,
+    .option = options,
+    .version = LIBAVUTIL_VERSION_INT,
+};
+
 AVCodec ff_hap_decoder = {
     .name           = "hap",
     .long_name      = NULL_IF_CONFIG_SMALL("Vidvox Hap"),
@@ -484,6 +520,7 @@ AVCodec ff_hap_decoder = {
     .init           = hap_init,
     .decode         = hap_decode,
     .close          = hap_close,
+    .priv_class     = &hap_class,
     .priv_data_size = sizeof(HapContext),
     .capabilities   = AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS |
                       AV_CODEC_CAP_DR1,
